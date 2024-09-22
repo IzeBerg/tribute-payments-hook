@@ -1,0 +1,9 @@
+.idea
+.session
+.venv
+.env
+*.session
+
+__pycache__
+
+poetry.lock
