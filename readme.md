@@ -11,6 +11,9 @@ Bot requires login into telegram account: `python -m app login`
 
 > Supports only Russian messages, probably English will be there in the future, feel free to contribute
 
+## Docker
+Everything could be run in docker, just use image [izeberg/tribute-payments-hook](https://hub.docker.com/repository/docker/izeberg/tribute-payments-hook).
+
 ## Settings
 Application could be configured with environment variables defined here [./app/settings.py](./app/settings.py).
 
