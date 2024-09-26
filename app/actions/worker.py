@@ -1,5 +1,7 @@
 import asyncio
 import dataclasses
+import hmac
+import json
 import logging
 import re
 from enum import Enum
@@ -133,22 +135,35 @@ async def post_message_data(message: types.Message, parsed: ParsedMessage):
     if settings.webhook_url is None:
         return
 
+    logger.debug(f"Try to post message {message.id} from {message.peer_id}: {parsed}")
+    headers = {
+        "Content-Type": "application/json",
+    }
+    data = json.dumps(
+        jsonify(
+            {
+                "message": message.to_dict(),
+                "parsed": parsed.to_dict(),
+            }
+        )
+    )
+    if settings.webhook_signature_key:
+        headers[settings.webhook_signature_header] = hmac.new(
+            settings.webhook_signature_key.encode("utf-8"),
+            data.encode("utf-8"),
+            settings.webhook_signature_digestmod,
+        ).hexdigest()
+
     auth = None
     if settings.webhook_login and settings.webhook_password:
         auth = aiohttp.BasicAuth(settings.webhook_login, settings.webhook_password)
-
-    logger.debug(f"Try to post message {message.id} from {message.peer_id}: {parsed}")
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
             settings.webhook_url,
             auth=auth,
-            json=jsonify(
-                {
-                    "message": message.to_dict(),
-                    "parsed": parsed.to_dict(),
-                }
-            ),
+            headers=headers,
+            data=data,
         ) as resp:
             resp.raise_for_status()
 

@@ -43,8 +43,26 @@ class Settings(BaseSettings):
         None,
         description="HTTP URL to send processed messages",
     )
-    webhook_login: str | None = None
-    webhook_password: str | None = None
+    webhook_login: str | None = Field(
+        default=None,
+        description="HTTP Basic auth login for webhook",
+    )
+    webhook_password: str | None = Field(
+        default=None,
+        description="HTTP Basic auth password for webhook",
+    )
+    webhook_signature_key: str | None = Field(
+        default=None,
+        description="HMAC signature key for webhook's body",
+    )
+    webhook_signature_digestmod: str = Field(
+        default="sha512",
+        description="HMAC signature digestmod for webhook's body",
+    )
+    webhook_signature_header: str = Field(
+        default="X-Signature",
+        description="HTTP header to send hmac signature",
+    )
     webhook_attempts: int = Field(
         default=3,
         description="Retries to send webhook message until application failure",

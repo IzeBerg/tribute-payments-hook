@@ -11,7 +11,10 @@ Bot requires login into telegram account: `python -m app login`
 
 > Supports only Russian messages, probably English will be there in the future, feel free to contribute
 
-Simple settings (put into .env or set as env var):
+## Settings
+Application could be configured with environment variables defined here [./app/settings.py](./app/settings.py).
+
+Here's example:
 ```
 # get credentials from https://my.telegram.org
 telegram_api_id=<api_id>
@@ -31,8 +34,8 @@ webhook_url=https://example.com/tribute
 # optional basic auth parameters
 webhook_login=user
 webhook_password=pwd
-# optional, attemts to send webhook request until 2xx status (default 3)
-webhook_attempts=3
+# optional hmac signature key for webhook's body
+webhook_signature_key=supersecretKey
 
 # optional, but strictly recommended, default None
 # date/datetime in ISO format
