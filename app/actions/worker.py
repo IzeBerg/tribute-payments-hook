@@ -1,14 +1,15 @@
+import asyncio
 import dataclasses
 import logging
 import re
 from enum import Enum
 
 import aiohttp
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, hints
 from telethon.tl import types
 
 from app.settings import settings
-from app.utils import async_retry, jsonify, tg_client
+from app.utils import DataStorage, async_retry, jsonify, tg_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,28 +56,61 @@ async def run():
 async def run_with_client(tg: TelegramClient):
     peer = await tg.get_entity(settings.telegram_incoming_from)
     logger.info(f"Waiting messages from {peer}")
-    tg.add_event_handler(
-        on_incoming_message,
-        events.NewMessage(
-            incoming=True,
-            from_users=peer,
-        ),
+    new_message_event = asyncio.Event()
+    new_message_event.set()
+
+    @tg.on(events.NewMessage(incoming=True, from_users=peer))
+    async def on_incoming_message(_):
+        logger.debug("New message received from peer")
+        new_message_event.set()
+
+    await asyncio.gather(
+        wait_for_messages(tg, peer, new_message_event),
+        tg.run_until_disconnected(),
     )
-    await tg.run_until_disconnected()
 
 
-async def on_incoming_message(event: events.NewMessage.Event):
-    logger.debug(f"handle message {event}")
-    if settings.telegram_forward_to:
-        logger.debug(f"Forward message {event.message.id} from {event.message.peer_id}")
-        await event.client.forward_messages(
-            entity=settings.telegram_forward_to,
-            messages=event.message,
-            from_peer=event.message.peer_id,
-        )
+async def wait_for_messages(
+    tg: TelegramClient,
+    messages_from: hints.Entity,
+    new_message: asyncio.Event,
+):
+    while True:
+        await new_message.wait()
+        new_message.clear()
+        with DataStorage() as storage:
+            await fetch_messages(storage, tg, messages_from)
 
-    if await handle_message(event.client, event.message):
-        logger.info(f"Handled message {event.message.id} from {event.message.peer_id}")
+
+@async_retry(settings.fetch_messages_attempts)
+async def fetch_messages(
+    storage: DataStorage,
+    tg: TelegramClient,
+    entity: hints.Entity,
+):
+    async for message in tg.iter_messages(
+        entity=entity,
+        reverse=True,
+        min_id=storage.get("recent_message_id", 0),
+        offset_date=settings.initial_messages_offset_dt,
+    ):
+        if not message.out:
+            handled = await handle_message(tg, message)
+            if handled:
+                logger.info(f"Handled message {message.id} from {message.peer_id}")
+
+            if settings.telegram_forward_to and (
+                not settings.forward_only_parsed or handled
+            ):
+                logger.debug(f"Forward message {message.id} from {message.peer_id}")
+                await tg.forward_messages(
+                    entity=settings.telegram_forward_to,
+                    messages=message,
+                    from_peer=message.peer_id,
+                )
+
+        storage["recent_message_id"] = message.id
+        storage.save()
 
 
 async def handle_message(tg: TelegramClient, message: types.Message):
@@ -103,7 +137,7 @@ async def post_message_data(message: types.Message, parsed: ParsedMessage):
     if settings.webhook_login and settings.webhook_password:
         auth = aiohttp.BasicAuth(settings.webhook_login, settings.webhook_password)
 
-    logger.info(f"Try to post message {message.id} from {message.peer_id}: {parsed}")
+    logger.debug(f"Try to post message {message.id} from {message.peer_id}: {parsed}")
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
