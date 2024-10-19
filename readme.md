@@ -1,3 +1,5 @@
+> This version is outdated, better use https://github.com/izeberg/go-tribute-payments-hook
+
 # Telegram Tribute bot hook
 
 Accepts messages from [@tribute](https://t.me/tribute) bot:
